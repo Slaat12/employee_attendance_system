@@ -5,15 +5,9 @@ define('APP_ROOT', dirname(__DIR__));
 define('APP_NAME', 'Northstar Employee Attendance');
 define('APP_TIMEZONE', 'Africa/Accra');
 define('APP_DEMO', false);
+define('APP_SESSION_LIFETIME', 20 * 60);
 
 date_default_timezone_set(APP_TIMEZONE);
-
-/* Load application components */
-
-require_once APP_ROOT . '/app/helpers.php';
-require_once APP_ROOT . '/app/Throttle.php';
-require_once APP_ROOT . '/app/Auth.php';
-require_once APP_ROOT . '/app/AttendanceService.php';
 
 /* Security response headers */
 
@@ -31,30 +25,38 @@ $secure = (
     && $_SERVER['HTTPS'] !== 'off'
 );
 
-ini_set('session.use_strict_mode', '1');
-ini_set('session.use_only_cookies', '1');
-ini_set('session.cookie_httponly', '1');
-ini_set('session.cookie_secure', $secure ? '1' : '0');
-ini_set('session.cookie_samesite', 'Lax');
+if (session_status() === PHP_SESSION_NONE) {
 
-define('APP_SESSION_LIFETIME', 20 * 60);
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.cookie_secure', $secure ? '1' : '0');
+    ini_set('session.cookie_samesite', 'Lax');
 
-ini_set(
-    'session.gc_maxlifetime',
-    (string) (APP_SESSION_LIFETIME * 6)
-);
+    ini_set(
+        'session.gc_maxlifetime',
+        (string) (APP_SESSION_LIFETIME * 6)
+    );
 
-session_name('northstar_session');
+    session_name('northstar_session');
 
-session_set_cookie_params([
-    'lifetime' => 0,
-    'path' => '/',
-    'secure' => $secure,
-    'httponly' => true,
-    'samesite' => 'Lax',
-]);
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'secure' => $secure,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
 
-session_start();
+    session_start();
+}
+
+/* Load application components */
+
+require_once APP_ROOT . '/app/helpers.php';
+require_once APP_ROOT . '/app/Throttle.php';
+require_once APP_ROOT . '/app/Auth.php';
+require_once APP_ROOT . '/app/AttendanceService.php';
 
 /* Administrator inactivity timeout */
 
