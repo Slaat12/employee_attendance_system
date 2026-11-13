@@ -1,0 +1,23 @@
+
+# Private configuration and credentials
+.env
+.env.*
+config/database.php
+config/*secret*
+
+# Private certificates and keys
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Logs and database backups
+*.log
+*.sql
+*.dump
+*.backup
+
+# Local uploads and temporary files
+storage/logs/
+storage/uploads/
+tmp/
