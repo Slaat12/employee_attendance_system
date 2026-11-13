@@ -2,7 +2,7 @@
 # Private configuration and credentials
 .env
 .env.*
-config/database.php
+config/database.local.php
 config/*secret*
 
 # Private certificates and keys
