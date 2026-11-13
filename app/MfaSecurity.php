@@ -1,12 +1,30 @@
 
 <?php
 
-require_once 'C:/xampp/private/mfa_config.php';
+// Load the private local configuration when running on XAMPP.
+$localMfaConfig = 'C:/xampp/private/mfa_config.php';
+
+if (file_exists($localMfaConfig)) {
+    require_once $localMfaConfig;
+}
+
+// On Render, load the encryption key from an environment variable.
+if (!defined('APP_MFA_ENCRYPTION_KEY')) {
+    $mfaKey = getenv('APP_MFA_ENCRYPTION_KEY');
+
+    if ($mfaKey !== false && $mfaKey !== '') {
+        define('APP_MFA_ENCRYPTION_KEY', $mfaKey);
+    }
+}
 
 final class MfaSecurity
 {
     private static function encryptionKey(): string
     {
+        if (!defined('APP_MFA_ENCRYPTION_KEY')) {
+            throw new RuntimeException('MFA encryption key is not configured.');
+        }
+
         $key = base64_decode(APP_MFA_ENCRYPTION_KEY, true);
 
         if ($key === false || strlen($key) !== 32) {
