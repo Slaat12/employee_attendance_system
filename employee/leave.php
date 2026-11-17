@@ -84,7 +84,7 @@ require APP_ROOT . '/includes/header.php';
     <div class="leave-grid">
         <div class="leave-stat"><span>Annual entitlement</span><strong><?= (int)$entitlement ?></strong><span>working days · <?= $year ?></span></div>
         <div class="leave-stat"><span>Approved leave used</span><strong><?= $used ?></strong><span>working days</span></div>
-        <div class="leave-stat"><span>Available balance</span><strong><?= $remaining ?></strong><span>working days remaining</span></div>
+        <div class="leave-stat"><span>Available leave</span><strong><?= $remaining ?></strong><span>working days remaining</span></div>
     </div>
     <section class="leave-panel">
         <h2>Request leave</h2>
