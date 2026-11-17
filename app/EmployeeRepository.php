@@ -133,15 +133,20 @@ class EmployeeRepository
             return 'Please complete all required employee fields.';
         }
 
+        $saveStage = 'starting transaction';
+
         try {
+            $saveStage = 'begin transaction';
             $db->beginTransaction();
 
             // Generate the next employee code for new employees.
             // A transaction-level advisory lock prevents two registrations
             // from choosing the same number at the same time.
             if ($id === null) {
+                $saveStage = 'acquire employee-code lock';
                 $db->query("SELECT pg_advisory_xact_lock(731902, 1)");
 
+                $saveStage = 'generate next employee code';
                 $nextNumber = (int) $db->query("
                     SELECT COALESCE(
                         MAX(
@@ -167,6 +172,7 @@ class EmployeeRepository
                 return 'Employee ID is required.';
             }
 
+            $saveStage = 'prepare department lookup';
             $deptStmt = $db->prepare("
                 SELECT department_id
                 FROM departments
@@ -174,6 +180,7 @@ class EmployeeRepository
                 LIMIT 1
             ");
 
+            $saveStage = 'execute department lookup';
             $deptStmt->execute(['name' => $department]);
 
             $departmentId = $deptStmt->fetchColumn();
@@ -194,6 +201,7 @@ class EmployeeRepository
                 $checkSql .= " AND employee_id <> :id";
             }
 
+            $saveStage = 'prepare duplicate employee-code check';
             $check = $db->prepare($checkSql);
 
             $params = ['code' => $code];
@@ -202,6 +210,7 @@ class EmployeeRepository
                 $params['id'] = $id;
             }
 
+            $saveStage = 'execute duplicate employee-code check';
             $check->execute($params);
 
             if ($check->fetch()) {
@@ -240,8 +249,10 @@ class EmployeeRepository
                     )
                 ";
 
+                $saveStage = 'prepare employee insert';
                 $stmt = $db->prepare($sql);
 
+                $saveStage = 'execute employee insert';
                 $stmt->execute([
                     'code' => $code,
                     'first_name' => $firstName,
@@ -296,10 +307,13 @@ class EmployeeRepository
                     $params['pin_hash'] = $pinHash;
                 }
 
+                $saveStage = 'prepare employee update';
                 $stmt = $db->prepare($sql);
+                $saveStage = 'execute employee update';
                 $stmt->execute($params);
             }
 
+            $saveStage = 'commit transaction';
             $db->commit();
 
             return null;
@@ -310,7 +324,10 @@ class EmployeeRepository
                 $db->rollBack();
             }
 
-            error_log('EMPLOYEE SAVE ERROR: ' . $e->getMessage());
+            error_log(
+                'EMPLOYEE SAVE ERROR at [' . $saveStage . ']: ' .
+                $e->getMessage()
+            );
 
             return 'Unable to save the employee. Please check the details and try again.';
         }
