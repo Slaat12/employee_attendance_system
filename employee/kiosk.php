@@ -55,5 +55,20 @@ require APP_ROOT . '/includes/header.php';
 <label>Personal PIN<input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" required placeholder="Enter your 4–8 digit PIN" autocomplete="off" <?= $prefillId !== '' ? 'autofocus' : '' ?>></label>
 <div class="kiosk-actions"><button class="btn primary" name="action" value="in">↗ Check in</button><button class="btn outline" name="action" value="out">↙ Check out</button></div></form>
 <p class="kiosk-help">Your attendance time is recorded automatically. Do not share your PIN.</p></div>
-<div class="kiosk-bottom"><span><i class="live-dot"></i> Attendance terminal ready</span><span><a href="<?= e(url('employee/portal.php')) ?>">Employee portal</a> &nbsp; · &nbsp; <?php if (Auth::isAdmin()): ?><a href="<?= e(url('admin/dashboard.php')) ?>">Administrator dashboard</a><?php else: ?><a href="<?= e(url('auth/login.php')) ?>">Administrator sign in</a><?php endif; ?></span></div></div>
+<section class="employee-portal-promo">
+    <div class="portal-promo-icon">↗</div>
+    <div class="portal-promo-copy">
+        <span class="eyebrow">EMPLOYEE SELF-SERVICE</span>
+        <h2>View your attendance records</h2>
+        <p>Sign in to your personal portal to check your attendance history and download your records.</p>
+    </div>
+    <a class="btn primary portal-promo-button" href="<?= e(url('employee/portal.php')) ?>">Open Employee Portal <span aria-hidden="true">→</span></a>
+</section>
+<style>
+.employee-portal-promo{width:min(560px,calc(100% - 32px));margin:22px auto 0;padding:22px 24px;display:flex;align-items:center;gap:16px;background:#fff;border:1px solid #dfe5ee;border-radius:14px;box-shadow:0 8px 24px rgba(20,35,60,.06)}
+.portal-promo-icon{width:46px;height:46px;flex:0 0 46px;display:grid;place-items:center;border-radius:12px;background:#eef2f8;color:#183153;font-size:24px;font-weight:700}
+.portal-promo-copy{flex:1;min-width:0}.portal-promo-copy h2{margin:5px 0;font-size:18px;color:#17243a}.portal-promo-copy p{margin:0;color:#758094;font-size:13px;line-height:1.5}.portal-promo-button{white-space:nowrap;text-decoration:none}
+@media(max-width:600px){.employee-portal-promo{align-items:flex-start;flex-wrap:wrap;padding:18px}.portal-promo-copy{flex:1 1 calc(100% - 64px)}.portal-promo-button{width:100%;justify-content:center;text-align:center}}
+</style>
+<div class="kiosk-bottom"><span><i class="live-dot"></i> Attendance terminal ready</span><span><?php if (Auth::isAdmin()): ?><a href="<?= e(url('admin/dashboard.php')) ?>">Administrator dashboard</a><?php else: ?><a href="<?= e(url('auth/login.php')) ?>">Administrator sign in</a><?php endif; ?></span></div></div>
 <?php require APP_ROOT . '/includes/end.php'; ?>
