@@ -144,7 +144,11 @@ class EmployeeRepository
             // from choosing the same number at the same time.
             if ($id === null) {
                 $saveStage = 'acquire employee-code lock';
-                $db->query("SELECT pg_advisory_xact_lock(731902, 1)");
+                $lockStmt = $db->query(
+                    "SELECT pg_advisory_xact_lock(731902, 1)"
+                );
+                $lockStmt->fetchColumn();
+                $lockStmt->closeCursor();
 
                 $saveStage = 'generate next employee code';
                 $nextNumber = (int) $db->query("
