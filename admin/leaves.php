@@ -61,8 +61,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (mb_strlen($note) > 1000) {
             $error = 'Administrator note cannot exceed 1,000 characters.';
         } else {
+            $reviewStage = 'starting approval';
             try {
+                $reviewStage = 'starting database transaction';
                 $db->beginTransaction();
+                $reviewStage = 'locking leave request';
                 $stmt = $db->prepare("SELECT * FROM leave_requests WHERE leave_id = :id FOR UPDATE");
                 $stmt->execute(['id' => $requestId]);
                 $request = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -72,22 +75,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $error = 'This request is no longer pending.';
                 } elseif ($action === 'approve') {
                     $year = (int) date('Y');
+                    $reviewStage = 'calculating leave days against public holidays';
                     $requestDays = leave_working_days($db, (string) $request['start_date'], (string) $request['end_date']);
                     if ($requestDays < 1) {
                         $db->rollBack();
                         $error = 'This request contains no working days after excluding weekends and public holidays.';
                     } else {
+                        $reviewStage = 'checking annual leave balance';
                         $balance = $db->prepare("SELECT entitlement_days FROM leave_balances WHERE employee_id = :employee_id AND leave_year = :leave_year FOR UPDATE");
                         $balance->execute(['employee_id' => $request['employee_id'], 'leave_year' => $year]);
                         $entitlement = $balance->fetchColumn();
 
                         if ($entitlement === false) {
+                            $reviewStage = 'creating default annual leave balance';
                             $db->prepare("INSERT INTO leave_balances(employee_id,leave_year,entitlement_days) VALUES(:employee_id,:leave_year,15) ON CONFLICT(employee_id,leave_year) DO NOTHING")
                                 ->execute(['employee_id' => $request['employee_id'], 'leave_year' => $year]);
                             $balance->execute(['employee_id' => $request['employee_id'], 'leave_year' => $year]);
                             $entitlement = $balance->fetchColumn();
                         }
 
+                        $reviewStage = 'calculating previously approved leave';
                         $used = $db->prepare("SELECT COALESCE(SUM(working_days),0) FROM leave_requests WHERE employee_id = :employee_id AND status = 'approved' AND EXTRACT(YEAR FROM start_date) = :leave_year AND leave_id <> :leave_id");
                         $used->execute(['employee_id' => $request['employee_id'], 'leave_year' => $year, 'leave_id' => $requestId]);
 
@@ -95,6 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $db->rollBack();
                             $error = 'Cannot approve this request because it exceeds the employee’s remaining annual leave balance.';
                         } else {
+                            $reviewStage = 'saving approved leave request';
                             $update = $db->prepare("UPDATE leave_requests SET status = 'approved', working_days = :working_days, admin_note = :note WHERE leave_id = :id");
                             $update->execute(['working_days' => $requestDays, 'note' => $note ?: null, 'id' => $requestId]);
                             $db->commit();
@@ -103,6 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                 } else {
+                    $reviewStage = 'saving rejected leave request';
                     $update = $db->prepare("UPDATE leave_requests SET status = 'rejected', admin_note = :note WHERE leave_id = :id");
                     $update->execute(['note' => $note ?: null, 'id' => $requestId]);
                     $db->commit();
@@ -113,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($db->inTransaction()) {
                     $db->rollBack();
                 }
-                error_log('LEAVE REVIEW ERROR: ' . $e->getMessage());
+                error_log('LEAVE REVIEW ERROR at ' . ($reviewStage ?? 'unknown stage') . ': ' . $e->getMessage());
                 $error = 'Unable to process this leave request. Please try again.';
             }
         }
