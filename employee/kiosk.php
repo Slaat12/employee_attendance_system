@@ -55,5 +55,5 @@ require APP_ROOT . '/includes/header.php';
 <label>Personal PIN<input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" required placeholder="Enter your 4–8 digit PIN" autocomplete="off" <?= $prefillId !== '' ? 'autofocus' : '' ?>></label>
 <div class="kiosk-actions"><button class="btn primary" name="action" value="in">↗ Check in</button><button class="btn outline" name="action" value="out">↙ Check out</button></div></form>
 <p class="kiosk-help">Your attendance time is recorded automatically. Do not share your PIN.</p></div>
-<div class="kiosk-bottom"><span><i class="live-dot"></i> Attendance terminal ready</span><?php if (Auth::isAdmin()): ?><a href="<?= e(url('admin/dashboard.php')) ?>">← Back to dashboard</a><?php else: ?><a href="<?= e(url('auth/login.php')) ?>">Administrator sign in</a><?php endif; ?></div></div>
+<div class="kiosk-bottom"><span><i class="live-dot"></i> Attendance terminal ready</span><span><a href="<?= e(url('employee/portal.php')) ?>">Employee portal</a> &nbsp; · &nbsp; <?php if (Auth::isAdmin()): ?><a href="<?= e(url('admin/dashboard.php')) ?>">Administrator dashboard</a><?php else: ?><a href="<?= e(url('auth/login.php')) ?>">Administrator sign in</a><?php endif; ?></span></div></div>
 <?php require APP_ROOT . '/includes/end.php'; ?>
