@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $f = [
             'id' => $id,
-            'employee_id' => strtoupper(post_str('employee_id')),
+            'employee_id' => $id ? strtoupper(post_str('employee_id')) : '',
             'first_name' => preg_replace('/\s+/u', ' ', post_str('first_name')),
             'last_name' => preg_replace('/\s+/u', ' ', post_str('last_name')),
             'email' => post_str('email'),
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pin = post_raw('pin');
         $form = $f;
 
-        if (!valid_employee_id($f['employee_id'])) {
+        if ($id && !valid_employee_id($f['employee_id'])) {
 
             $error = 'Employee ID must be 3–20 letters, numbers or hyphens.';
 
@@ -203,17 +203,23 @@ require APP_ROOT . '/includes/sidebar.php';
         <input type="hidden" name="id"
                value="<?= e($f['id'] ?? '') ?>">
 
-        <label>
-            Employee ID
+        <?php if ($isEdit): ?>
+            <label>
+                Employee ID
 
-            <input name="employee_id"
-                   required
-                   maxlength="20"
-                   pattern="[A-Za-z0-9\-]{3,20}"
-                   autocomplete="off"
-                   value="<?= e($f['employee_id'] ?? '') ?>"
-                   placeholder="EMP004">
-        </label>
+                <input name="employee_id"
+                       required
+                       maxlength="20"
+                       pattern="[A-Za-z0-9\-]{3,20}"
+                       autocomplete="off"
+                       value="<?= e($f['employee_id'] ?? '') ?>">
+            </label>
+        <?php else: ?>
+            <div class="notice">
+                <b>Employee ID</b>
+                <p>This will be generated automatically when the employee is registered.</p>
+            </div>
+        <?php endif; ?>
 
         <label>
             First name
