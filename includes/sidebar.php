@@ -2,6 +2,7 @@
     'dashboard'   => ['admin/dashboard.php',   '▦', 'Dashboard'],
     'employees'   => ['admin/employees.php',   '♙', 'Employees'],
     'attendance'  => ['admin/attendance.php',  '◷', 'Attendance'],
+    'leaves'       => ['admin/leaves.php',       '▣', 'Leave Management'],
     'departments' => ['admin/departments.php', '▤', 'Departments'],
     'reports'     => ['admin/reports.php',     '▥', 'Reports'],
     'settings'    => ['admin/settings.php',    '⚙', 'Settings'],
