@@ -1,8 +1,12 @@
 <?php
 declare(strict_types=1);
+
 require_once __DIR__ . '/app/bootstrap.php';
 
-if (Auth::check()) {
-    redirect(Auth::user()['role'] === 'admin' ? 'admin/dashboard.php' : 'employee/kiosk.php');
+// Keep authenticated administrators on their dashboard.
+// Everyone else starts at the shared employee attendance kiosk.
+if (Auth::isAdmin()) {
+    redirect('admin/dashboard.php');
 }
-redirect('auth/login.php');
+
+redirect('employee/kiosk.php');
