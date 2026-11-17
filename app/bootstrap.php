@@ -56,6 +56,7 @@ require_once APP_ROOT . '/app/helpers.php';
 require_once APP_ROOT . '/app/Throttle.php';
 require_once APP_ROOT . '/app/Auth.php';
 require_once APP_ROOT . '/app/AttendanceService.php';
+require_once APP_ROOT . '/app/LeaveCalendar.php';
 
 /* Administrator inactivity timeout */
 
