@@ -114,7 +114,6 @@ class EmployeeRepository
         ?int $id = null,
         ?string $pinHash = null
     ): ?string {
-
         $db = self::db();
 
         $code = trim($data['employee_id'] ?? '');
@@ -133,11 +132,14 @@ class EmployeeRepository
             return 'Please complete all required employee fields.';
         }
 
-        // New registrations use one atomic PostgreSQL statement.
-        // This avoids carrying a transaction across separate lock, code-generation,
-        // department-lookup and insert queries.
-        if ($id === null) {
-            try {
+        if ($id === null && $pinHash === null) {
+            return 'A valid employee PIN is required.';
+        }
+
+        try {
+            if ($id === null) {
+                // Generate the employee code and insert the employee in one
+                // atomic statement. The advisory lock prevents duplicate codes.
                 $sql = "
                     WITH employee_code_lock AS MATERIALIZED (
                         SELECT pg_advisory_xact_lock(731902, 1)
@@ -146,110 +148,16 @@ class EmployeeRepository
                         SELECT COALESCE(
                             MAX(
                                 CASE
-                                    WHEN e.employee_code ~ '^EMP[0-9]+
-
-        try {
-            $saveStage = 'begin transaction';
-            $db->beginTransaction();
-
-            // Generate the next employee code for new employees.
-            // A transaction-level advisory lock prevents two registrations
-            // from choosing the same number at the same time.
-            if ($id === null) {
-                $saveStage = 'acquire employee-code lock';
-                $lockStmt = $db->query(
-                    "SELECT pg_advisory_xact_lock(731902, 1)"
-                );
-                $lockStmt->fetchColumn();
-                $lockStmt->closeCursor();
-
-                $saveStage = 'generate next employee code';
-                $nextNumber = (int) $db->query("
-                    SELECT COALESCE(
-                        MAX(
-                            CASE
-                                WHEN employee_code ~ '^EMP[0-9]+$'
-                                THEN SUBSTRING(employee_code FROM 4)::INTEGER
-                                ELSE 0
-                            END
-                        ),
-                        0
+                                    WHEN e.employee_code ~ '^EMP[0-9]+$'
+                                    THEN SUBSTRING(e.employee_code FROM 4)::INTEGER
+                                    ELSE 0
+                                END
+                            ),
+                            0
+                        ) + 1 AS next_number
+                        FROM employees e
+                        CROSS JOIN employee_code_lock
                     )
-                    FROM employees
-                ")->fetchColumn() + 1;
-
-                $code = 'EMP' . str_pad(
-                    (string) $nextNumber,
-                    3,
-                    '0',
-                    STR_PAD_LEFT
-                );
-
-                // Confirm the transaction is still usable before the next query.
-                $saveStage = 'verify transaction after employee-code generation';
-                $verifyStmt = $db->query("SELECT 1");
-                $verifyStmt->fetchColumn();
-                $verifyStmt->closeCursor();
-            } elseif ($code === '') {
-                $db->rollBack();
-                return 'Employee ID is required.';
-            }
-
-            $saveStage = 'prepare department lookup';
-            $deptStmt = $db->prepare("
-                SELECT department_id
-                FROM departments
-                WHERE LOWER(department_name) = LOWER(:name)
-                LIMIT 1
-            ");
-
-            $saveStage = 'execute department lookup';
-            $deptStmt->execute(['name' => $department]);
-
-            $departmentId = $deptStmt->fetchColumn();
-
-            if (!$departmentId) {
-                $db->rollBack();
-                return 'The selected department does not exist.';
-            }
-
-            // Check whether another employee uses this code.
-            $checkSql = "
-                SELECT employee_id
-                FROM employees
-                WHERE LOWER(employee_code) = LOWER(:code)
-            ";
-
-            if ($id !== null) {
-                $checkSql .= " AND employee_id <> :id";
-            }
-
-            $saveStage = 'prepare duplicate employee-code check';
-            $check = $db->prepare($checkSql);
-
-            $params = ['code' => $code];
-
-            if ($id !== null) {
-                $params['id'] = $id;
-            }
-
-            $saveStage = 'execute duplicate employee-code check';
-            $check->execute($params);
-
-            if ($check->fetch()) {
-                $db->rollBack();
-                return 'This employee ID is already in use.';
-            }
-
-            // Insert a new employee.
-            if ($id === null) {
-
-                if ($pinHash === null) {
-                    $db->rollBack();
-                    return 'A valid employee PIN is required.';
-                }
-
-                $sql = "
                     INSERT INTO employees (
                         employee_code,
                         first_name,
@@ -260,97 +168,124 @@ class EmployeeRepository
                         pin_hash,
                         status
                     )
-                    VALUES (
-                        :code,
+                    SELECT
+                        'EMP' || LPAD(next_employee_code.next_number::TEXT, 3, '0'),
                         :first_name,
                         :last_name,
                         :email,
                         :phone,
-                        :department_id,
+                        d.department_id,
                         :pin_hash,
                         'active'
-                    )
+                    FROM next_employee_code
+                    INNER JOIN departments d
+                        ON LOWER(d.department_name) = LOWER(:department)
+                    RETURNING employee_id
                 ";
 
-                $saveStage = 'prepare employee insert';
                 $stmt = $db->prepare($sql);
-
-                $saveStage = 'execute employee insert';
                 $stmt->execute([
-                    'code' => $code,
                     'first_name' => $firstName,
                     'last_name' => $lastName,
                     'email' => $email !== '' ? $email : null,
                     'phone' => $phone !== '' ? $phone : null,
-                    'department_id' => $departmentId,
-                    'pin_hash' => $pinHash
+                    'pin_hash' => $pinHash,
+                    'department' => $department
                 ]);
 
-            } else {
-
-                // Update an existing employee.
-                if ($pinHash !== null) {
-                    $sql = "
-                        UPDATE employees
-                        SET
-                            employee_code = :code,
-                            first_name = :first_name,
-                            last_name = :last_name,
-                            email = :email,
-                            phone = :phone,
-                            department_id = :department_id,
-                            pin_hash = :pin_hash
-                        WHERE employee_id = :id
-                    ";
-                } else {
-                    $sql = "
-                        UPDATE employees
-                        SET
-                            employee_code = :code,
-                            first_name = :first_name,
-                            last_name = :last_name,
-                            email = :email,
-                            phone = :phone,
-                            department_id = :department_id
-                        WHERE employee_id = :id
-                    ";
+                if ($stmt->fetchColumn() === false) {
+                    return 'The selected department does not exist.';
                 }
 
-                $params = [
-                    'code' => $code,
-                    'first_name' => $firstName,
-                    'last_name' => $lastName,
-                    'email' => $email !== '' ? $email : null,
-                    'phone' => $phone !== '' ? $phone : null,
-                    'department_id' => $departmentId,
-                    'id' => $id
-                ];
-
-                if ($pinHash !== null) {
-                    $params['pin_hash'] = $pinHash;
-                }
-
-                $saveStage = 'prepare employee update';
-                $stmt = $db->prepare($sql);
-                $saveStage = 'execute employee update';
-                $stmt->execute($params);
+                return null;
             }
 
-            $saveStage = 'commit transaction';
+            if ($code === '') {
+                return 'Employee ID is required.';
+            }
+
+            $db->beginTransaction();
+
+            $deptStmt = $db->prepare("
+                SELECT department_id
+                FROM departments
+                WHERE LOWER(department_name) = LOWER(:name)
+                LIMIT 1
+            ");
+            $deptStmt->execute(['name' => $department]);
+            $departmentId = $deptStmt->fetchColumn();
+
+            if (!$departmentId) {
+                $db->rollBack();
+                return 'The selected department does not exist.';
+            }
+
+            $check = $db->prepare("
+                SELECT employee_id
+                FROM employees
+                WHERE LOWER(employee_code) = LOWER(:code)
+                  AND employee_id <> :id
+            ");
+            $check->execute([
+                'code' => $code,
+                'id' => $id
+            ]);
+
+            if ($check->fetch()) {
+                $db->rollBack();
+                return 'This employee ID is already in use.';
+            }
+
+            if ($pinHash !== null) {
+                $sql = "
+                    UPDATE employees
+                    SET employee_code = :code,
+                        first_name = :first_name,
+                        last_name = :last_name,
+                        email = :email,
+                        phone = :phone,
+                        department_id = :department_id,
+                        pin_hash = :pin_hash
+                    WHERE employee_id = :id
+                ";
+            } else {
+                $sql = "
+                    UPDATE employees
+                    SET employee_code = :code,
+                        first_name = :first_name,
+                        last_name = :last_name,
+                        email = :email,
+                        phone = :phone,
+                        department_id = :department_id
+                    WHERE employee_id = :id
+                ";
+            }
+
+            $params = [
+                'code' => $code,
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'email' => $email !== '' ? $email : null,
+                'phone' => $phone !== '' ? $phone : null,
+                'department_id' => $departmentId,
+                'id' => $id
+            ];
+
+            if ($pinHash !== null) {
+                $params['pin_hash'] = $pinHash;
+            }
+
+            $stmt = $db->prepare($sql);
+            $stmt->execute($params);
             $db->commit();
 
             return null;
-
         } catch (PDOException $e) {
-
             if ($db->inTransaction()) {
                 $db->rollBack();
             }
 
-            error_log(
-                'EMPLOYEE SAVE ERROR at [' . $saveStage . ']: ' .
-                $e->getMessage()
-            );
+            error_log('EMPLOYEE SAVE ERROR: ' . $e->getMessage());
 
             return 'Unable to save the employee. Please check the details and try again.';
         }
