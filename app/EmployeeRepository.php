@@ -137,18 +137,36 @@ class EmployeeRepository
             $db->beginTransaction();
 
             // Generate the next employee code for new employees.
-            // The transaction lock prevents simultaneous registrations
-            // from selecting the same number.
+            // A transaction-level advisory lock prevents two registrations
+            // from choosing the same number at the same time.
             if ($id === null) {
                 $db->query("SELECT pg_advisory_xact_lock(731902, 1)");
 
                 $nextNumber = (int) $db->query("
                     SELECT COALESCE(
-                        MAX(SUBSTRING(employee_code FROM 4)::INTEGER),
+                        MAX(
+                            CASE
+                                WHEN employee_code ~ '^EMP[0-9]+$'
+                                THEN SUBSTRING(employee_code FROM 4)::INTEGER
+                                ELSE 0
+                            END
+                        ),
                         0
                     )
                     FROM employees
-                    WHERE employee_code ~ '^EMP[0-9]+
+                ")->fetchColumn() + 1;
+
+                $code = 'EMP' . str_pad(
+                    (string) $nextNumber,
+                    3,
+                    '0',
+                    STR_PAD_LEFT
+                );
+            } elseif ($code === '') {
+                $db->rollBack();
+                return 'Employee ID is required.';
+            }
+
             $deptStmt = $db->prepare("
                 SELECT department_id
                 FROM departments
@@ -522,10 +540,9 @@ class EmployeeRepository
                 $db->rollBack();
             }
 
-            // TEMPORARY DEBUGGING: display the actual database error.
             error_log('EMPLOYEE SAVE ERROR: ' . $e->getMessage());
 
-            return 'Database error: ' . $e->getMessage();
+            return 'Unable to save the employee. Please check the details and try again.';
         }
     }
 
