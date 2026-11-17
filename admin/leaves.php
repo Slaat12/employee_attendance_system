@@ -56,73 +56,129 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (in_array($action, ['approve', 'reject'], true)) {
         $requestId = filter_var(post_str('request_id'), FILTER_VALIDATE_INT);
         $note = trim(post_str('admin_note'));
+
         if (!$requestId) {
             $error = 'Invalid leave request.';
         } elseif (mb_strlen($note) > 1000) {
             $error = 'Administrator note cannot exceed 1,000 characters.';
         } else {
-            $reviewStage = 'starting approval';
+            $reviewStage = 'loading leave request';
             try {
-                $reviewStage = 'starting database transaction';
-                $db->beginTransaction();
-                $reviewStage = 'locking leave request';
-                $stmt = $db->prepare("SELECT * FROM leave_requests WHERE leave_id = :id FOR UPDATE");
+                // Keep validation queries outside a transaction. This ensures
+                // PostgreSQL reports the first failing statement instead of
+                // masking it with SQLSTATE 25P02 on a later query.
+                $stmt = $db->prepare("SELECT * FROM leave_requests WHERE leave_id = :id");
                 $stmt->execute(['id' => $requestId]);
                 $request = $stmt->fetch(PDO::FETCH_ASSOC);
 
                 if (!$request || $request['status'] !== 'pending') {
-                    $db->rollBack();
                     $error = 'This request is no longer pending.';
                 } elseif ($action === 'approve') {
                     $year = (int) date('Y');
+
                     $reviewStage = 'calculating leave days against public holidays';
-                    $requestDays = leave_working_days($db, (string) $request['start_date'], (string) $request['end_date']);
+                    $requestDays = leave_working_days(
+                        $db,
+                        (string) $request['start_date'],
+                        (string) $request['end_date']
+                    );
+
                     if ($requestDays < 1) {
-                        $db->rollBack();
                         $error = 'This request contains no working days after excluding weekends and public holidays.';
                     } else {
                         $reviewStage = 'checking annual leave balance';
-                        $balance = $db->prepare("SELECT entitlement_days FROM leave_balances WHERE employee_id = :employee_id AND leave_year = :leave_year FOR UPDATE");
-                        $balance->execute(['employee_id' => $request['employee_id'], 'leave_year' => $year]);
+                        $balance = $db->prepare(
+                            "SELECT entitlement_days
+                             FROM leave_balances
+                             WHERE employee_id = :employee_id AND leave_year = :leave_year"
+                        );
+                        $balance->execute([
+                            'employee_id' => $request['employee_id'],
+                            'leave_year' => $year,
+                        ]);
                         $entitlement = $balance->fetchColumn();
 
                         if ($entitlement === false) {
                             $reviewStage = 'creating default annual leave balance';
-                            $db->prepare("INSERT INTO leave_balances(employee_id,leave_year,entitlement_days) VALUES(:employee_id,:leave_year,15) ON CONFLICT(employee_id,leave_year) DO NOTHING")
-                                ->execute(['employee_id' => $request['employee_id'], 'leave_year' => $year]);
-                            $balance->execute(['employee_id' => $request['employee_id'], 'leave_year' => $year]);
+                            $insertBalance = $db->prepare(
+                                "INSERT INTO leave_balances (employee_id, leave_year, entitlement_days)
+                                 VALUES (:employee_id, :leave_year, 15)
+                                 ON CONFLICT (employee_id, leave_year) DO NOTHING"
+                            );
+                            $insertBalance->execute([
+                                'employee_id' => $request['employee_id'],
+                                'leave_year' => $year,
+                            ]);
+                            $balance->execute([
+                                'employee_id' => $request['employee_id'],
+                                'leave_year' => $year,
+                            ]);
                             $entitlement = $balance->fetchColumn();
                         }
 
                         $reviewStage = 'calculating previously approved leave';
-                        $used = $db->prepare("SELECT COALESCE(SUM(working_days),0) FROM leave_requests WHERE employee_id = :employee_id AND status = 'approved' AND EXTRACT(YEAR FROM start_date) = :leave_year AND leave_id <> :leave_id");
-                        $used->execute(['employee_id' => $request['employee_id'], 'leave_year' => $year, 'leave_id' => $requestId]);
+                        $used = $db->prepare(
+                            "SELECT COALESCE(SUM(working_days), 0)
+                             FROM leave_requests
+                             WHERE employee_id = :employee_id
+                               AND status = 'approved'
+                               AND EXTRACT(YEAR FROM start_date) = :leave_year
+                               AND leave_id <> :leave_id"
+                        );
+                        $used->execute([
+                            'employee_id' => $request['employee_id'],
+                            'leave_year' => $year,
+                            'leave_id' => $requestId,
+                        ]);
+                        $usedDays = (int) $used->fetchColumn();
 
-                        if ((int) $used->fetchColumn() + $requestDays > (int) $entitlement) {
-                            $db->rollBack();
+                        if ($entitlement === false) {
+                            $error = 'An annual leave balance could not be created for this employee.';
+                        } elseif ($usedDays + $requestDays > (int) $entitlement) {
                             $error = 'Cannot approve this request because it exceeds the employee’s remaining annual leave balance.';
                         } else {
                             $reviewStage = 'saving approved leave request';
-                            $update = $db->prepare("UPDATE leave_requests SET status = 'approved', working_days = :working_days, admin_note = :note WHERE leave_id = :id");
-                            $update->execute(['working_days' => $requestDays, 'note' => $note ?: null, 'id' => $requestId]);
-                            $db->commit();
-                            flash('success', 'Leave request approved.');
-                            redirect('admin/leaves.php');
+                            $update = $db->prepare(
+                                "UPDATE leave_requests
+                                 SET status = 'approved', working_days = :working_days, admin_note = :note
+                                 WHERE leave_id = :id AND status = 'pending'"
+                            );
+                            $update->execute([
+                                'working_days' => $requestDays,
+                                'note' => $note !== '' ? $note : null,
+                                'id' => $requestId,
+                            ]);
+
+                            if ($update->rowCount() === 1) {
+                                flash('success', 'Leave request approved.');
+                                redirect('admin/leaves.php');
+                            }
+                            $error = 'This request was changed by another administrator. Refresh the page and try again.';
                         }
                     }
                 } else {
                     $reviewStage = 'saving rejected leave request';
-                    $update = $db->prepare("UPDATE leave_requests SET status = 'rejected', admin_note = :note WHERE leave_id = :id");
-                    $update->execute(['note' => $note ?: null, 'id' => $requestId]);
-                    $db->commit();
-                    flash('success', 'Leave request rejected.');
-                    redirect('admin/leaves.php');
+                    $update = $db->prepare(
+                        "UPDATE leave_requests
+                         SET status = 'rejected', admin_note = :note
+                         WHERE leave_id = :id AND status = 'pending'"
+                    );
+                    $update->execute([
+                        'note' => $note !== '' ? $note : null,
+                        'id' => $requestId,
+                    ]);
+
+                    if ($update->rowCount() === 1) {
+                        flash('success', 'Leave request rejected.');
+                        redirect('admin/leaves.php');
+                    }
+                    $error = 'This request was changed by another administrator. Refresh the page and try again.';
                 }
             } catch (Throwable $e) {
-                if ($db->inTransaction()) {
-                    $db->rollBack();
-                }
-                error_log('LEAVE REVIEW ERROR at ' . ($reviewStage ?? 'unknown stage') . ': ' . $e->getMessage());
+                error_log(
+                    'LEAVE REVIEW ERROR at ' . ($reviewStage ?? 'unknown stage') .
+                    ': ' . get_class($e) . ': ' . $e->getMessage()
+                );
                 $error = 'Unable to process this leave request. Please try again.';
             }
         }
