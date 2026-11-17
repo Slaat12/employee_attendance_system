@@ -1,4 +1,3 @@
-
 <?php
 
 // This migration must only be run from Command Prompt.

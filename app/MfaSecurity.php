@@ -1,4 +1,3 @@
-
 <?php
 
 // Load the private local configuration when running on XAMPP.
