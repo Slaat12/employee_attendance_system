@@ -11,17 +11,6 @@ $error = null;
 $success = null;
 $db = Database::connection();
 
-function leave_working_days(string $start, string $end): int {
-    $count = 0;
-    $date = new DateTimeImmutable($start);
-    $last = new DateTimeImmutable($end);
-    while ($date <= $last) {
-        if ((int)$date->format('N') <= 5) $count++;
-        $date = $date->modify('+1 day');
-    }
-    return $count;
-}
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $start = post_str('start_date');
@@ -35,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (mb_strlen($reason) < 5 || mb_strlen($reason) > 1000) {
         $error = 'Please provide a reason between 5 and 1,000 characters.';
     } else {
-        $days = leave_working_days($start, $end);
+        $days = leave_working_days($db, $start, $end);
         if ($days < 1) {
             $error = 'The selected dates contain no working days.';
         } else {
@@ -88,7 +77,7 @@ require APP_ROOT . '/includes/header.php';
     </div>
     <section class="leave-panel">
         <h2>Request leave</h2>
-        <p class="leave-muted">Weekends are excluded from the working-day calculation. Requests are not approved until an administrator reviews them.</p>
+        <p class="leave-muted">Saturdays, Sundays and dates in the Ghana public holiday calendar are excluded. Requests are not approved until an administrator reviews them.</p>
         <form method="post" class="leave-form">
             <?=csrf_field()?>
             <label>Start date<input type="date" name="start_date" min="<?=e(today_string())?>" required value="<?=e(post_str('start_date'))?>"></label>
