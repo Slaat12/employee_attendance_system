@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         else {
             try {
                 $db->beginTransaction();
-                $stmt=$db->prepare("SELECT * FROM leave_requests WHERE leave_request_id=:id FOR UPDATE");
+                $stmt=$db->prepare("SELECT * FROM leave_requests WHERE leave_id=:id FOR UPDATE");
                 $stmt->execute(['id'=>$requestId]);
                 $request=$stmt->fetch(PDO::FETCH_ASSOC);
                 if (!$request || $request['status']!=='pending') {
@@ -50,14 +50,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $db->rollBack();
                         $error='Cannot approve this request because it exceeds the employee’s remaining annual leave balance.';
                     } else {
-                        $update=$db->prepare("UPDATE leave_requests SET status='approved',admin_note=:note,reviewed_by=:admin_id,reviewed_at=CURRENT_TIMESTAMP WHERE leave_request_id=:id");
-                        $update->execute(['note'=>$note ?: null,'admin_id'=>Auth::user()['id'],'id'=>$requestId]);
+                        $update=$db->prepare("UPDATE leave_requests SET status='approved',admin_note=:note WHERE leave_id=:id");
+                        $update->execute(['note'=>$note ?: null,'id'=>$requestId]);
                         $db->commit();
                         flash('success','Leave request approved.');
                         redirect('admin/leaves.php');
                     }
                 } else {
-                    $update=$db->prepare("UPDATE leave_requests SET status='rejected',admin_note=:note,reviewed_by=:admin_id,reviewed_at=CURRENT_TIMESTAMP WHERE leave_request_id=:id");
+                    $update=$db->prepare("UPDATE leave_requests SET status='rejected',admin_note=:note WHERE leave_id=:id");
                     $update->execute(['note'=>$note ?: null,'admin_id'=>Auth::user()['id'],'id'=>$requestId]);
                     $db->commit();
                     flash('success','Leave request rejected.');
@@ -96,7 +96,7 @@ require APP_ROOT . '/includes/sidebar.php';
 <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><div><h3><?=e($req['first_name'].' '.$req['last_name'])?> <small class="muted"><?=e($req['employee_code'])?></small></h3><p class="muted"><?=e($req['department_name']??'No department')?> · <?=e(date('d M Y',strtotime($req['start_date'])))?> to <?=e(date('d M Y',strtotime($req['end_date'])))?> · <?= (int)$req['working_days']?> working day(s)</p></div><span class="status <?= $req['status']==='approved'?'present':($req['status']==='pending'?'late':'inactive')?>"><?=e(ucfirst($req['status']))?></span></div>
 <p><?=nl2br(e($req['reason']))?></p>
 <?php if($req['admin_note']):?><p class="muted">Administrator note: <?=e($req['admin_note'])?></p><?php endif;?>
-<?php if($req['status']==='pending'):?><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="request_id" value="<?=(int)$req['leave_request_id']?>"><label class="span-two">Note to employee<textarea name="admin_note" rows="2" maxlength="1000"></textarea></label><div class="form-actions"><button class="btn primary" name="action" value="approve">Approve</button><button class="btn outline" name="action" value="reject">Reject</button></div></form><?php endif;?>
+<?php if($req['status']==='pending'):?><form method="post" class="form-grid"><?=csrf_field()?><input type="hidden" name="request_id" value="<?=(int)$req['leave_id']?>"><label class="span-two">Note to employee<textarea name="admin_note" rows="2" maxlength="1000"></textarea></label><div class="form-actions"><button class="btn primary" name="action" value="approve">Approve</button><button class="btn outline" name="action" value="reject">Reject</button></div></form><?php endif;?>
 </section>
 <?php endforeach;?>
 <?php if(!$requests):?><div class="panel empty">No leave requests have been submitted yet.</div><?php endif;?>
