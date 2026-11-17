@@ -137,6 +137,10 @@ require APP_ROOT . '/includes/header.php';
             </form>
         </div>
     </div>
+    <section class="portal-card" style="margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap">
+        <div><h2 class="portal-title">Leave management</h2><p class="portal-muted">Check your annual leave balance, submit a request and follow its status.</p></div>
+        <a class="btn primary" href="<?= e(url('employee/leave.php')) ?>">Manage my leave →</a>
+    </section>
     <section class="portal-card">
         <h2 class="portal-title">My attendance history</h2>
         <p class="portal-muted">Your latest <?= $totalRecords ?> attendance record(s). Only your own records are shown here.</p>
