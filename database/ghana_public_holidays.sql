@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS public_holidays (
 INSERT INTO public_holidays (holiday_date, holiday_name) VALUES
 ('2026-01-01', 'New Year''s Day'),
 ('2026-01-07', 'Constitution Day'),
-('2026-01-09', 'Constitution Day observed day'),
 ('2026-03-06', 'Independence Day'),
 ('2026-03-20', 'Eid-ul-Fitr'),
 ('2026-03-21', 'Shaqq Day'),
@@ -22,7 +21,6 @@ INSERT INTO public_holidays (holiday_date, holiday_name) VALUES
 ('2026-05-01', 'May Day'),
 ('2026-05-27', 'Eid-ul-Adha'),
 ('2026-07-01', 'Republic Day'),
-('2026-07-03', 'Republic Day observed day'),
 ('2026-09-21', 'Founders'' Day'),
 ('2026-12-04', 'Farmers'' Day'),
 ('2026-12-25', 'Christmas Day'),
