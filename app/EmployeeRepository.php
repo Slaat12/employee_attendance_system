@@ -171,6 +171,12 @@ class EmployeeRepository
                     '0',
                     STR_PAD_LEFT
                 );
+
+                // Confirm the transaction is still usable before the next query.
+                $saveStage = 'verify transaction after employee-code generation';
+                $verifyStmt = $db->query("SELECT 1");
+                $verifyStmt->fetchColumn();
+                $verifyStmt->closeCursor();
             } elseif ($code === '') {
                 $db->rollBack();
                 return 'Employee ID is required.';
