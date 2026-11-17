@@ -54,21 +54,19 @@ require APP_ROOT . '/includes/header.php';
 <label>Employee ID<input name="employee_id" id="employee_id" required maxlength="20" pattern="[A-Za-z0-9\-]{3,20}" placeholder="e.g. EMP001" autocomplete="off" autocapitalize="characters" spellcheck="false" value="<?= e($prefillId) ?>" <?= $prefillId === '' ? 'autofocus' : '' ?>></label>
 <label>Personal PIN<input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" maxlength="8" required placeholder="Enter your 4–8 digit PIN" autocomplete="off" <?= $prefillId !== '' ? 'autofocus' : '' ?>></label>
 <div class="kiosk-actions"><button class="btn primary" name="action" value="in">↗ Check in</button><button class="btn outline" name="action" value="out">↙ Check out</button></div></form>
-<p class="kiosk-help">Your attendance time is recorded automatically. Do not share your PIN.</p></div>
-<section class="employee-portal-promo">
-    <div class="portal-promo-icon">↗</div>
+<div class="employee-portal-promo">
     <div class="portal-promo-copy">
         <span class="eyebrow">EMPLOYEE SELF-SERVICE</span>
-        <h2>View your attendance records</h2>
-        <p>Sign in to your personal portal to check your attendance history and download your records.</p>
+        <strong>Need to view your attendance history?</strong>
     </div>
-    <a class="btn primary portal-promo-button" href="<?= e(url('employee/portal.php')) ?>">Open Employee Portal <span aria-hidden="true">→</span></a>
-</section>
+    <a class="btn outline portal-promo-button" href="<?= e(url('employee/portal.php')) ?>">Employee Portal →</a>
+</div>
+<p class="kiosk-help">Your attendance time is recorded automatically. Do not share your PIN.</p></div>
 <style>
-.employee-portal-promo{width:min(560px,calc(100% - 32px));margin:22px auto 0;padding:22px 24px;display:flex;align-items:center;gap:16px;background:#fff;border:1px solid #dfe5ee;border-radius:14px;box-shadow:0 8px 24px rgba(20,35,60,.06)}
-.portal-promo-icon{width:46px;height:46px;flex:0 0 46px;display:grid;place-items:center;border-radius:12px;background:#eef2f8;color:#183153;font-size:24px;font-weight:700}
-.portal-promo-copy{flex:1;min-width:0}.portal-promo-copy h2{margin:5px 0;font-size:18px;color:#17243a}.portal-promo-copy p{margin:0;color:#758094;font-size:13px;line-height:1.5}.portal-promo-button{white-space:nowrap;text-decoration:none}
-@media(max-width:600px){.employee-portal-promo{align-items:flex-start;flex-wrap:wrap;padding:18px}.portal-promo-copy{flex:1 1 calc(100% - 64px)}.portal-promo-button{width:100%;justify-content:center;text-align:center}}
+.employee-portal-promo{margin:15px 0 0;padding:13px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;background:#f4f7fb;border:1px solid #dce5f0;border-radius:10px}
+.portal-promo-copy{display:flex;flex-direction:column;gap:4px;min-width:0}.portal-promo-copy .eyebrow{font-size:9px;margin:0}.portal-promo-copy strong{font-size:12px;line-height:1.35;color:#20334d}.portal-promo-button{flex:0 0 auto;white-space:nowrap;text-decoration:none;font-size:11px;padding:10px 12px}
+.kiosk-card{padding:28px 34px}.kiosk-icon{margin-bottom:12px}.kiosk-card>.muted{margin-bottom:16px}.kiosk-help{margin:12px 0 0}
+@media(max-width:720px){.kiosk-card{padding:22px 17px}.employee-portal-promo{padding:11px 10px;gap:7px}.portal-promo-copy strong{font-size:11px}.portal-promo-button{font-size:10px;padding:9px 8px}.kiosk-icon{width:42px;height:42px;font-size:22px;margin-bottom:8px}.kiosk-card h1{margin:7px 0;font-size:19px}.kiosk-card>.muted{margin-bottom:12px}.kiosk-form label{margin-bottom:9px}.kiosk-form input{height:39px}.kiosk-actions .btn{padding:11px}.kiosk-help{margin-top:9px}}
 </style>
 <div class="kiosk-bottom"><span><i class="live-dot"></i> Attendance terminal ready</span><span><?php if (Auth::isAdmin()): ?><a href="<?= e(url('admin/dashboard.php')) ?>">Administrator dashboard</a><?php else: ?><a href="<?= e(url('auth/login.php')) ?>">Administrator sign in</a><?php endif; ?></span></div></div>
 <?php require APP_ROOT . '/includes/end.php'; ?>
