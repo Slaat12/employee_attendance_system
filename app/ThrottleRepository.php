@@ -62,7 +62,7 @@ class ThrottleRepository
             "INSERT INTO login_attempts
                 (key_hash, fail_count, first_attempt, locked_until, updated_at)
              VALUES
-                (?, 1, ?, CASE WHEN ? <= 1 THEN ? ELSE NULL END, CURRENT_TIMESTAMP)
+                (?, 1, ?, CASE WHEN CAST(? AS INTEGER) <= 1 THEN CAST(? AS BIGINT) ELSE NULL::BIGINT END, CURRENT_TIMESTAMP)
              ON CONFLICT (key_hash) DO UPDATE
              SET
                 fail_count = CASE
@@ -70,7 +70,7 @@ class ThrottleRepository
                          AND login_attempts.locked_until > EXCLUDED.first_attempt
                     THEN login_attempts.fail_count
 
-                    WHEN (EXCLUDED.first_attempt - login_attempts.first_attempt) > ?
+                    WHEN (EXCLUDED.first_attempt - login_attempts.first_attempt) > CAST(? AS BIGINT)
                          OR (
                              login_attempts.locked_until IS NOT NULL
                              AND login_attempts.locked_until <= EXCLUDED.first_attempt
@@ -107,8 +107,8 @@ class ThrottleRepository
                          )
                     THEN NULL
 
-                    WHEN login_attempts.fail_count + 1 >= ?
-                    THEN EXCLUDED.first_attempt + ?
+                    WHEN login_attempts.fail_count + 1 >= CAST(? AS INTEGER)
+                    THEN EXCLUDED.first_attempt + CAST(? AS BIGINT)
 
                     ELSE NULL
                 END,
