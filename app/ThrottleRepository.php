@@ -48,97 +48,101 @@ class ThrottleRepository
         int $lockSeconds
     ): array {
 
-        $db = self::db();
+        /*
+         * Record a failed login in one atomic PostgreSQL UPSERT.
+         *
+         * Keeping this as one statement avoids a multi-query transaction
+         * becoming aborted between INSERT, SELECT FOR UPDATE and UPDATE.
+         * PostgreSQL serializes conflicting updates to the same key_hash.
+         */
+        $now = time();
+        $lockUntil = $now + $lockSeconds;
 
-        try {
-            $db->beginTransaction();
+        $stmt = self::db()->prepare(
+            "INSERT INTO login_attempts
+                (key_hash, fail_count, first_attempt, locked_until, updated_at)
+             VALUES
+                (?, 1, ?, CASE WHEN ? <= 1 THEN ? ELSE NULL END, CURRENT_TIMESTAMP)
+             ON CONFLICT (key_hash) DO UPDATE
+             SET
+                fail_count = CASE
+                    WHEN login_attempts.locked_until IS NOT NULL
+                         AND login_attempts.locked_until > EXCLUDED.first_attempt
+                    THEN login_attempts.fail_count
 
-            $stmt = $db->prepare(
-                "INSERT INTO login_attempts
-                    (key_hash, fail_count, first_attempt, locked_until, updated_at)
-                 VALUES
-                    (:key_hash, 0, :first_attempt, NULL, CURRENT_TIMESTAMP)
-                 ON CONFLICT (key_hash) DO NOTHING"
+                    WHEN (EXCLUDED.first_attempt - login_attempts.first_attempt) > ?
+                         OR (
+                             login_attempts.locked_until IS NOT NULL
+                             AND login_attempts.locked_until <= EXCLUDED.first_attempt
+                         )
+                    THEN 1
+
+                    ELSE login_attempts.fail_count + 1
+                END,
+
+                first_attempt = CASE
+                    WHEN login_attempts.locked_until IS NOT NULL
+                         AND login_attempts.locked_until > EXCLUDED.first_attempt
+                    THEN login_attempts.first_attempt
+
+                    WHEN (EXCLUDED.first_attempt - login_attempts.first_attempt) > ?
+                         OR (
+                             login_attempts.locked_until IS NOT NULL
+                             AND login_attempts.locked_until <= EXCLUDED.first_attempt
+                         )
+                    THEN EXCLUDED.first_attempt
+
+                    ELSE login_attempts.first_attempt
+                END,
+
+                locked_until = CASE
+                    WHEN login_attempts.locked_until IS NOT NULL
+                         AND login_attempts.locked_until > EXCLUDED.first_attempt
+                    THEN login_attempts.locked_until
+
+                    WHEN (EXCLUDED.first_attempt - login_attempts.first_attempt) > ?
+                         OR (
+                             login_attempts.locked_until IS NOT NULL
+                             AND login_attempts.locked_until <= EXCLUDED.first_attempt
+                         )
+                    THEN NULL
+
+                    WHEN login_attempts.fail_count + 1 >= ?
+                    THEN EXCLUDED.first_attempt + ?
+
+                    ELSE NULL
+                END,
+
+                updated_at = CURRENT_TIMESTAMP
+             RETURNING fail_count, locked_until"
+        );
+
+        $stmt->execute([
+            $attemptKey,
+            $now,
+            $maxFails,
+            $lockUntil,
+            $windowSeconds,
+            $windowSeconds,
+            $windowSeconds,
+            $maxFails,
+            $lockSeconds
+        ]);
+
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            throw new RuntimeException(
+                'The login attempt could not be recorded.'
             );
-
-            $now = time();
-
-            $stmt->execute([
-                'key_hash' => $attemptKey,
-                'first_attempt' => $now
-            ]);
-
-            $stmt = $db->prepare(
-                "SELECT *
-                 FROM login_attempts
-                 WHERE key_hash = :key_hash
-                 FOR UPDATE"
-            );
-
-            $stmt->execute(['key_hash' => $attemptKey]);
-
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            $count = (int) $row['fail_count'];
-            $firstAttempt = (int) $row['first_attempt'];
-            $lockedUntil = $row['locked_until'] === null
-                ? null
-                : (int) $row['locked_until'];
-
-            if ($lockedUntil !== null && $lockedUntil > $now) {
-                $db->commit();
-
-                return [
-                    'attempt_count' => $count,
-                    'locked_until' => $lockedUntil
-                ];
-            }
-
-            if (($now - $firstAttempt) > $windowSeconds ||
-                ($lockedUntil !== null && $lockedUntil <= $now)) {
-
-                $count = 0;
-                $firstAttempt = $now;
-                $lockedUntil = null;
-            }
-
-            $count++;
-
-            if ($count >= $maxFails) {
-                $lockedUntil = $now + $lockSeconds;
-            }
-
-            $update = $db->prepare(
-                "UPDATE login_attempts
-                 SET fail_count = :fail_count,
-                     first_attempt = :first_attempt,
-                     locked_until = :locked_until,
-                     updated_at = CURRENT_TIMESTAMP
-                 WHERE key_hash = :key_hash"
-            );
-
-            $update->execute([
-                'fail_count' => $count,
-                'first_attempt' => $firstAttempt,
-                'locked_until' => $lockedUntil,
-                'key_hash' => $attemptKey
-            ]);
-
-            $db->commit();
-
-            return [
-                'attempt_count' => $count,
-                'locked_until' => $lockedUntil
-            ];
-
-        } catch (Throwable $error) {
-
-            if ($db->inTransaction()) {
-                $db->rollBack();
-            }
-
-            throw $error;
         }
+
+        return [
+            'attempt_count' => (int) $row['fail_count'],
+            'locked_until' => $row['locked_until'] === null
+                ? null
+                : (int) $row['locked_until']
+        ];
     }
 
     public static function clear(string $attemptKey): void
