@@ -85,7 +85,7 @@ class ThrottleRepository
                          AND login_attempts.locked_until > EXCLUDED.first_attempt
                     THEN login_attempts.first_attempt
 
-                    WHEN (EXCLUDED.first_attempt - login_attempts.first_attempt) > ?
+                    WHEN (EXCLUDED.first_attempt - login_attempts.first_attempt) > CAST(? AS BIGINT)
                          OR (
                              login_attempts.locked_until IS NOT NULL
                              AND login_attempts.locked_until <= EXCLUDED.first_attempt
@@ -100,7 +100,7 @@ class ThrottleRepository
                          AND login_attempts.locked_until > EXCLUDED.first_attempt
                     THEN login_attempts.locked_until
 
-                    WHEN (EXCLUDED.first_attempt - login_attempts.first_attempt) > ?
+                    WHEN (EXCLUDED.first_attempt - login_attempts.first_attempt) > CAST(? AS BIGINT)
                          OR (
                              login_attempts.locked_until IS NOT NULL
                              AND login_attempts.locked_until <= EXCLUDED.first_attempt
